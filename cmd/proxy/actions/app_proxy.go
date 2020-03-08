@@ -2,6 +2,7 @@ package actions
 
 import (
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"path"
@@ -17,6 +18,7 @@ import (
 	"github.com/gomods/athens/pkg/storage"
 	"github.com/gorilla/mux"
 	"github.com/spf13/afero"
+	"golang.org/x/mod/zip"
 )
 
 func addProxyRoutes(
@@ -114,6 +116,50 @@ func addProxyRoutes(
 
 	handlerOpts := &download.HandlerOpts{Protocol: dp, Logger: l, DownloadFile: df}
 	download.RegisterHandlers(r, handlerOpts)
+
+	r.HandleFunc("/{module:.+}/@v/{version}.upload", func(w http.ResponseWriter, r *http.Request) {
+		err := r.ParseMultipartForm(zip.MaxZipFile + zip.MaxGoMod)
+		if err != nil {
+			fmt.Printf("parse: %v\n", err)
+			return
+		}
+		infoFile, header, err := r.FormFile("mod.info")
+		if err != nil {
+			fmt.Printf("info: %v\n", err)
+			return
+		}
+		fmt.Println(header.Filename)
+		defer infoFile.Close()
+		info, err := ioutil.ReadAll(infoFile)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		modReader, header, err := r.FormFile("mod.mod")
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		fmt.Println(header.Filename)
+		defer modReader.Close()
+		modFile, err := ioutil.ReadAll(modReader)
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		modZ, header, err := r.FormFile("mod.zip")
+		if err != nil {
+			fmt.Printf("mod.zip: %v\n", err)
+			return
+		}
+		fmt.Println(header.Filename)
+		mod := mux.Vars(r)["module"]
+		ver := mux.Vars(r)["version"]
+		err = s.Save(r.Context(), mod, ver, modFile, modZ, info)
+		if err != nil {
+			fmt.Printf("save: %v\n", err)
+		}
+	})
 
 	return nil
 }
