@@ -1,4 +1,4 @@
-module github.com/gomods/athens
+module github.com/xytan0056/athens
 
 go 1.20
 
